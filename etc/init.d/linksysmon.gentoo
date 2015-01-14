@@ -1,0 +1,19 @@
+#!/sbin/runscript
+# Copyright 1999-2003 Gentoo Technologies, Inc.
+# Distributed under the terms of the GNU General Public License v2
+
+logfile=/var/log/linksys.log
+linksysmon=/usr/sbin/linksysmon
+prog=linksysmon
+
+start() {
+        ebegin "Starting linksysmon"
+        start-stop-daemon --start --quiet --exec $linksysmon --background
+        eend $?
+}
+
+stop() {
+        ebegin "Stopping linksysmon"
+        killall snmptrapd
+        eend $?
+}

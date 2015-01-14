@@ -1,0 +1,74 @@
+#!/usr/bin/perl
+
+# ============================================================================
+# Copyright (C) 2002 Michael J. Wohlgemuth. All rights reserved; 
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESSED OR IMPLIED WARRANTIES,
+# INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE
+# AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+# OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+# ============================================================================
+
+use strict;
+use linksysmon;
+
+$| = 1;
+
+my $prog = 'linksysmon-ez-ipupdate';
+my $host;
+my $ip;
+my $date;
+my $time;
+my $currentip;
+my @args;
+
+if (@ARGV == 4) {
+    ($host, $ip, $date, $time) = @ARGV;
+} 
+else {
+    die "Usage: $prog <hostname> <ip address> <date> <time>\n";
+}
+
+my $linksysmon = new linksysmon();
+
+my $h = $linksysmon->EZHost();
+my %hosthash = %$h;
+
+if ( $hosthash{$host}{'DNSName'} ne '') {
+
+    $currentip = join ('.', unpack ('C4', gethostbyname($hosthash{$host}{'DNSname'})));
+
+    if ($currentip ne $ip) {
+
+	my $ezpath = $linksysmon->EZPath();
+	my $ez = $ezpath." -q -a $ip -h ".
+	    $hosthash{$host}{'DNSName'}." -S ".$hosthash{$host}{'DNSService'}.
+	    " -u ".$hosthash{$host}{'UserName'}.":".
+            $hosthash{$host}{'Password'}." 2>&1";
+
+	open (EZ, "$ez |") or print "Error running $ezpath\n";
+
+	while (<EZ>) {
+	    print;
+	}
+
+	close(EZ);
+    }
+    else {
+	print "No need to update DNS entry for $host\n";
+    }
+}
+else {
+    print "No service defined for $host\n";
+}

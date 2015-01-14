@@ -1,0 +1,54 @@
+#!/usr/bin/perl
+
+# ============================================================================
+# Copyright (C) 2002 Michael J. Wohlgemuth. All rights reserved; 
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESSED OR IMPLIED WARRANTIES,
+# INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE
+# AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+# OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+# ============================================================================
+
+use strict;
+use linksysmon;
+
+my $linksysmon = new linksysmon();
+
+my $prog = "linksysmon-watch";
+my $host;
+my $date;
+my $time;
+my $inout;
+my $shost;
+my $sport;
+my $dhost;
+my $dport;
+
+if (@ARGV == 8) {
+    ($host, $date, $time, $inout, $shost, $sport, $dhost, $dport) = @ARGV;
+} 
+else {
+    die "Usage: $prog <hostname> <date> <time> <in|out> <source host> <source port> <destination host> <destination port>\n";
+}
+
+my $mailto = $linksysmon->WatchMailTo();
+
+my $mail = $linksysmon->MailPath()." -s \"$prog Notice\" ".join(' ', @$mailto);
+
+open (MAIL, "| $mail") || die "Error: Unable to send mail\n";
+print MAIL "$host reports connection from $shost:$sport to $dhost:$dport at $time on $date\n";
+close (MAIL);
+
+print "Notified ".join(", ", @$mailto)." of watch hit on host $shost and port $dport\n";
+

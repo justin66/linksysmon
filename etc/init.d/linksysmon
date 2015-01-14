@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# chkconfig: 235 99 01
+# description: Accepts SNMP logging from Linksys BEFSR /
+#              Firewalls
+     
+
+logfile=/var/log/linksys.log
+linksysmon=/usr/sbin/linksysmon
+prog=linksysmon
+
+start() {
+    echo "Starting $prog"
+    $linksysmon &
+}
+
+stop() {
+    echo "Stopping $prog"
+    killall snmptrapd
+}
+
+case $1 in
+    'start')
+	start
+	;;
+    'stop')
+	stop
+	;;
+    'restart')
+	stop
+	start
+	;;
+esac

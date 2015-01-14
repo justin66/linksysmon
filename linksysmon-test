@@ -1,0 +1,89 @@
+#!/usr/bin/perl
+
+# ============================================================================
+# Copyright (C) 2002 Michael J. Wohlgemuth. All rights reserved; 
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESSED OR IMPLIED WARRANTIES,
+# INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE
+# AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+# OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+# ============================================================================
+
+use linksysmon;
+
+my $k;
+my $configfile;
+
+if (@ARGV) {
+    $configfile = shift (@ARGV);
+}
+else {
+    $configfile = '/etc/linksysmon.conf';
+}
+
+my $linksysmon = new linksysmon($configfile);
+
+print "TrapdPath:        ".$linksysmon->TrapdPath()."\n";
+print "Logfile:          ".$linksysmon->LogFile()."\n";
+print "AlternateLogfile: ".$linksysmon->AlternateLogFile()."\n";
+print "Delimiter:        ".$linksysmon->Delimiter()."\n";
+print "ProcessIPChanges: ".$linksysmon->ProcessIPChanges()."\n";
+print "IPChangeProgram:  ".$linksysmon->IPChangeProgram()."\n";
+
+my $a = $linksysmon->MailTo();
+print "MailTo:           ".join(', ', @$a)."\n";
+
+print "MailPath:         ".$linksysmon->MailPath()."\n";
+print "EZPath:           ".$linksysmon->EZPath()."\n";
+
+my $h = $linksysmon->EZHost();
+my %hash = %$h;
+
+foreach $k (keys(%$h)) {
+    print "EZHost:           $k\n";
+    print "  DNSName:          ".$hash{$k}{'DNSName'}."\n";
+    print "  DNSService:       ".$hash{$k}{'DNSService'}."\n";
+    print "  Username:         ".$hash{$k}{'UserName'}."\n";
+    print "  Password:         ".$hash{$k}{'Password'}."\n";
+}
+
+print "ReportIgnoreOutbound:   ".$linksysmon->ReportIgnoreOutbound()."\n";
+print "ReportIgnoreSystem:     ".$linksysmon->ReportIgnoreSystem()."\n";
+
+$a = $linksysmon->ReportIgnorePorts();
+print "ReportIgnorePorts:      ".join(', ', @$a)."\n";
+
+$a = $linksysmon->ReportIgnoreHosts();
+print "ReportIgnoreHosts:      ".join(', ', @$a)."\n";
+
+print "ReportCountRepeats:     ".$linksysmon->ReportCountRepeats()."\n";
+
+$a = $linksysmon->WatchPorts();
+print "WatchPorts:       ".join(', ', @$a)."\n";
+
+$a = $linksysmon->WatchHosts();
+print "WatchHosts:       ".join(', ', @$a)."\n";
+
+$a = $linksysmon->WatchIgnorePorts();
+print "WatchIgnorePorts:       ".join(', ', @$a)."\n";
+
+$a = $linksysmon->WatchIgnoreHosts();
+print "WatchIgnoreHosts:       ".join(', ', @$a)."\n";
+
+print "WatchProgram:     ".$linksysmon->WatchProgram()."\n";
+
+$a = $linksysmon->WatchMailTo();
+print "WatchMailTo:      ".join(', ', @$a)."\n";
+
+print "WatchTimeOut:     ".$linksysmon->WatchTimeOut()."\n";

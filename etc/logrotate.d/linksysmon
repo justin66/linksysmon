@@ -1,0 +1,6 @@
+/var/log/linksys.log {
+    missingok
+    postrotate
+	/etc/init.d/linksysmon restart > /dev/null || /bin/true
+    endscript
+}

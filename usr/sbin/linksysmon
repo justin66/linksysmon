@@ -1,0 +1,242 @@
+#!/usr/bin/perl
+
+# ============================================================================
+# Copyright (C) 2002 Michael J. Wohlgemuth. All rights reserved; 
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESSED OR IMPLIED WARRANTIES,
+# INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE
+# AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+# OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+# ============================================================================
+
+use strict;
+use linksysmon;
+
+my $linksysmon = new linksysmon();
+
+my $snmptrapd = $linksysmon->TrapdPath().' -C -f -Le -F "%A %y-%02.2m-%02.2l %02.2h:%02.2j:%02.2k %v\n" -Oa 2>&1 1>/dev/null';
+    
+my $prog = 'linksysmon';
+
+my $lasttime;
+my $secondsindex = 0;
+my $logfile = $linksysmon->LogFile();
+my $alternatelogfile = $linksysmon->AlternateLogFile();
+my $d = $linksysmon->Delimiter();
+my $watchports = $linksysmon->WatchPorts();
+my $watchhosts = $linksysmon->WatchHosts();
+my $watchignoreports = $linksysmon->WatchIgnorePorts();
+my $watchignorehosts = $linksysmon->WatchIgnoreHosts();
+my $watchmailto = $linksysmon->WatchMailTo();
+my %watchhash;
+my $wpname = $linksysmon->WatchProgram();
+my $ipcpname = $linksysmon->IPChangeProgram();
+my $mainttimer = time;
+my $watchtimeout = $linksysmon->WatchTimeOut();
+
+open (SNMPTRAPD,"$snmptrapd |") or die "$prog: Error starting snmptrapd\n";
+
+open (LOG, ">>$logfile") or die "$prog: Error opening $logfile\n";
+select LOG;
+$| = 1;
+select STDOUT;
+
+if ($alternatelogfile ne "") {
+    open (ALTLOG, ">>$alternatelogfile") or 
+	die "$prog: Error opening $alternatelogfile\n";
+    select ALTLOG;
+    $| = 1;
+    select STDOUT;
+}
+
+sub log {
+
+    my $logmessage = shift;
+
+    print LOG $logmessage;
+    if ($alternatelogfile ne "") {
+	print ALTLOG $logmessage;
+    }
+}
+
+while (<SNMPTRAPD>) {
+    
+  SWITCH: {
+      
+# Match on activity log line
+      
+      /^(\S+)\s+([0-9]{4}-[0-9]{2}-[0-9]{2})\s+([0-9]{2}:[0-9]{2}:[0-9]{2})\s+(?:\S+::)?enterprises\.[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\s+=\s+(?:\S+:\s+)?"@(in|out)\s+(\S+)\s+([0-9]+)\s+(\S+)\s+([0-9]+)\."$/ && do {
+	  
+	  if ($3 eq $lasttime) {
+	      $secondsindex++;
+	  }
+	  else {
+	      $secondsindex = 0;
+	  }
+	  
+	  &log ("$1$d$2$d${3}\-$secondsindex$d$4$d$5$d$6$d$7$d$8\n");
+
+	  my $host = $1;
+	  my $date = $2;
+	  my $time = $3;
+	  my $inout = $4;
+	  my $shost = $5;
+	  my $sport = $6;
+	  my $dhost = $7;
+	  my $dport = $8;
+
+	  if ((grep(/^$shost$/, @$watchhosts) || 
+	       (grep(/^$dport$/, @$watchports) && $inout eq "in")) &&
+	      (!grep(/^$shost$/, @$watchignorehosts)) &&
+	      (!grep(/^$dport$/, @$watchignoreports))) {
+	      
+# We have a hit on WatchHosts or WatchPorts, but not hit
+# WatchIgnoreHosts or WatchIgnorePorts, so we call WatchProgram,
+# unless WatchTimeOut has not expired for this source host/destination
+# port combo 
+	      
+	      my $localtime = time;
+	      
+	      if (!exists($watchhash{"$shost:$dport"}) ||
+		  $localtime - $watchhash{"$shost:$dport"} > $watchtimeout) {
+		  
+		  my $wp = "$wpname $host $date $time $inout $shost $sport $dhost $dport 2>&1";
+		  
+		  if (!open (WP, "$wp |")){
+		      
+		      $secondsindex++;
+		      
+		      &log ("$host$d$date$d$time\-$secondsindex${d}linksysmon${d}Error running watch program $wpname\n");
+		      
+		  }
+		  else { 
+		      while (<WP>) {
+			  $secondsindex++;
+			  &log ("$host$d$date$d$time\-$secondsindex${d}linksysmon$d$wpname: $_");
+			  close (WP);
+		      }
+		  }
+		  
+		  $watchhash{"$shost:$dport"} = $localtime;
+	      }
+	      else {
+		  &log ("$host$d$date$d$time\-$secondsindex${d}linksysmon$d$prog: Not running $wpname, WatchTimeOut not expired for host $shost and port $dport\n");
+	      }
+	  }
+	  
+	  $lasttime = $3;
+	  
+	  last SWITCH;
+	  
+      };
+      
+# Match on system, pppoe, ras, and nat log lines.  You can turn on
+# these extended options by going to http://<linksys>/LogManage.htm.
+# I'd like to separate these into different log sections, but the
+# linksys logs them all under the same SNMP string, so the different
+# entries are too annoying to break out.
+      
+      /^(\S+)\s+([0-9]{4}-[0-9]{2}-[0-9]{2})\s+([0-9]{2}:[0-9]{2}:[0-9]{2})\s+(?:\S+::)?enterprises\.[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\s+=\s+(?:\S+:\s+)?"(.+)"$/ && do {
+	  
+	  if ($3 eq $lasttime) {
+	      $secondsindex++;
+	  }
+	  else {
+	      $secondsindex = 0;
+	  }
+	  
+	  &log ("$1$d$2$d$3\-$secondsindex${d}system$d$4\n");
+	  
+	  $lasttime = $3;
+	  
+# If you turn on system logging, you will get messages like "WAN IP =
+# 1.2.3.4" when a dhcp address is assigned.  If you turn on pppoe 
+# logging, you will get messages like "IP=1.2.3.4" when a ppp address 
+# is assigned.  There may very well be others, but I haven't seen 
+# them.
+	  
+	  if ($linksysmon->ProcessIPChanges()) {
+	      
+	      my $host = $1;
+	      my $date = $2;
+	      my $time = $3;
+	      my $message = $4;
+	      
+	      if ($message =~ /^WAN\s+IP\s*=\s*(\S+)$/ ||
+		  $message =~ /^IP=(\S+)\.$/) {
+		  
+		  my $ip = $1;
+		  my $ipcp = "$ipcpname $host $ip $date $time 2>&1";
+		  
+		  if (!open (IPCP, "$ipcp |")){
+		      $secondsindex++;
+		      &log ("$host$d$date$d$time\-$secondsindex${d}linksysmon${d}Error running IP change program $ipcpname\n");
+		  }
+		  while (<IPCP>) {
+		      $secondsindex++;
+		      &log ("$host$d$date$d$time\-$secondsindex${d}linksysmon${d}$ipcpname: $_");
+		  }
+	      }
+	  }
+	  
+	  last SWITCH;
+	  
+      };
+      
+# snmptrapd is getting more an more annoying about printing stuff I
+# don't care about
+
+      (/(UCD-snmp|NET-SNMP) version [^\s]+ Started\.$/ ||
+       /(UCD-snmp|NET-SNMP) version [^\s]+ Stopped\.$/ ||
+       /^Error\: Failed to connect to the agentx master agent/ ||
+       /^Warning\: no access control information configured\.$/ ||
+       /^  It\'s unlikely this agent can serve any useful purpose in this state\.$/ ||
+       /^  Run "snmpconf -g basic_setup" to help you configure the snmptrapd.conf file for this agent\.$/
+       ) && do {
+	  
+	  # don't do anything
+	  last SWITCH;
+	  
+      };
+      
+# No matches, so we got something unexpected
+      
+      chomp;
+      
+      &log ("Parse error: >$_<\n");
+      
+  }
+    
+# Free up expired entries in %watchhash.  We only do this once every WatchTimeOut
+    
+    my $localtime = time;
+    
+    if ($localtime - $mainttimer > $watchtimeout) {
+	
+	foreach my $key (keys %watchhash) {
+	    
+	    if ($localtime - $watchhash{$key} > $watchtimeout) {
+		
+		delete $watchhash{$key};
+		
+	    }
+	}
+    }
+    
+    $mainttimer = $localtime;
+}
+
+close (SNMPTRAPD);
+close (LOG);
+close (ALTLOG);

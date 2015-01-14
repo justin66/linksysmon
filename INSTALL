@@ -1,0 +1,73 @@
+Installation
+
+Note: You must make sure that you have the proper version of Net-SNMP
+installed, or linksysmon will not work.  As of linksysmon 1.1.4, you
+must have Net-SNMP 5.2.  Once you have verified your version of
+Net-SNMP, do the following:
+
+First, make sure that you have logging turned on in your Linksys
+router:
+
+Go to http://192.168.1.1/Log.htm, and enter the admin username and
+password.
+
+Click on 'enable', and enter the IP address of your log host, or 255
+if you would like to broadcast them to all hosts on the subnet.  Click
+on 'Apply'.
+
+If you wish to enable extended logging, go to
+http://192.168.1.1/LogManage.htm.  If you get your external IP address
+using DHCP and enable the "System Log", or you use PPPoE and enable
+the "PPPoE & RAS Log", linksysmon should notice when your IP address
+changes.
+
+Next, these instructions assume that you have already installed
+UCD-snmp and, if you are planning on doing dynamic DNS updates,
+ez-ipupdate (http://gusnet.cx/proj/ez-ipupdate/).
+
+Download http://woogie.net/linksysmon/linksysmon-X.Y.tar.gz
+
+gzip -cd linksysmon-X.Y.tar.gz | tar xf -
+cd linksysmon-X.Y
+
+Next, you must make the perl module:
+
+perl Makefile.PL
+make
+
+su to root by typing 'su' and entering the root password.
+
+make install
+
+Then, install the programs:
+
+./install.sh
+
+Edit /etc/linksysmon.conf to your liking
+
+Note: if you already have an older version of linksysmon installed,
+install.sh will not overwrite your current /etc/linksysmon.conf, but
+will instead write it to /etc/linksysmon.conf-new.
+
+If you want linksysmon to start automatically, type '/sbin/chkconfig
+--add linksysmon'.  This will set linksysmon to run in levels 2, 3,
+and 5.
+
+Type '/etc/init.d/linksysmon start'.  If all goes well, you will
+start seeing log entries in /var/log/linksys.log.
+
+If you don't see log entries, here are a few things to check:
+
+-Double check to make sure you really have the Linksys set up to log
+to your host.
+
+-Make sure that you don't have any firewall rules (ipchains or
+iptables) that might be blocking the log packets.
+
+-When all else fails, try using tcpdump or ethereal to see what
+traffic is on your network.  This might give you some hint as to what
+is going on.
+
+Mike Wohlgemuth
+mjw@purplefrog.com
+http://woogie.net/linksysmon/

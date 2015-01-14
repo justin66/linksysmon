@@ -1,0 +1,233 @@
+#!/usr/bin/perl
+
+# ============================================================================
+# Copyright (C) 2002 Michael J. Wohlgemuth. All rights reserved; 
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESSED OR IMPLIED WARRANTIES,
+# INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE
+# AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+# OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+# ============================================================================
+
+use strict;
+use linksysmon;
+
+my $linksysmon = new linksysmon();
+
+$| = 1;
+
+my $logfile = $linksysmon->LogFile();
+
+my $ignoreports = $linksysmon->ReportIgnorePorts();
+my $ignorehosts = $linksysmon->ReportIgnoreHosts();
+my $d = $linksysmon->Delimiter();
+
+my $prog = "linksysmon-report";        # this program's name
+
+my $linksys; 
+my $date; 
+my $time; 
+my $type; 
+my $one; 
+my $two; 
+my $three; 
+my $four;
+
+my $sec; 
+my $min; 
+my $hour;
+my $mday;
+my $mon;
+my $year;
+my $wday;
+my $yday;
+my $isdst;
+
+my $yesterday;
+
+my %activityhash;
+my %systemhash;
+my %linksysmonhash;
+my $rec;
+my @parseerrors;
+
+($sec, 
+ $min, 
+ $hour,
+ $mday,
+ $mon,
+ $year,
+ $wday,
+ $yday,
+ $isdst,
+ ) = localtime(time-86400);
+
+$year += 1900;
+$mon++;
+$mon < 10 && do { $mon = '0'.$mon };
+$mday < 10 && do { $mday = '0'.$mday };
+
+$yesterday = $year.'-'.$mon.'-'.$mday;
+
+
+open (LOG, "grep -h $yesterday $logfile $logfile.1 2> /dev/null |") or 
+    die "$prog: Error opening $logfile\n";
+
+while (<LOG>) {
+
+    chomp;
+
+    ($linksys, 
+     $date, 
+     $time, 
+     $type, 
+     $one, 
+     $two, 
+     $three, 
+     $four,
+     ) = split /$d/;
+
+  SWITCH: {
+
+# Match on activity log line
+
+      $type =~ /^(in|out)$/ && do {
+	  
+	  if ((!$linksysmon->ReportIgnoreOutbound() || 
+	       $type eq "in") &&
+	      (!grep (/^$two$/, @$ignoreports) &&
+	       !grep (/^$four$/, @$ignoreports) &&
+	       !grep (/^$one$/, @$ignorehosts) &&
+	       !grep (/^$three$/, @$ignorehosts))
+	      ) {
+
+	      $rec = { 'type' => $type,
+		       'shost' => $one,
+		       'sport' => $two,
+		       'dhost' => $three,
+		       'dport' => $four,
+		   };
+
+	      $activityhash{$linksys}{$time} = \%$rec;
+					      
+	  }
+	  last SWITCH;
+
+      };
+
+# Match on system, pppoe, ras, and nat log lines.
+
+      $type =~ /^system$/ && do {
+
+	  if (!$linksysmon->ReportIgnoreSystem) {
+	      $systemhash{$linksys}{$time} = $one;
+	  }
+	  last SWITCH;
+
+      };
+
+# Match on linksysmon log lines.
+
+      $type =~ /^linksysmon$/ && do {
+
+	  $linksysmonhash{$linksys}{$time} = $one;
+
+	  last SWITCH;
+
+      };
+
+# No matches, so we got something unexpected.  We always log these
+
+      push @parseerrors, $_;
+
+  }
+
+}
+
+close (LOG);
+
+my $mailto = $linksysmon->MailTo();
+
+my $mail = $linksysmon->MailPath()." -s \"$prog for $yesterday\" ".join(' ', @$mailto);
+
+open (MAIL, "| $mail") || die "Error: Unable to send mail\n";
+
+print MAIL "$prog for $yesterday\n\n";
+print MAIL "Ignoring ports ".join (", ", @$ignoreports)."\n";
+print MAIL "Ignoring hosts ".join (", ", @$ignorehosts)."\n\n";
+
+foreach $linksys (keys %activityhash) {
+
+    print MAIL "Activity for $linksys\n\n";
+
+    print MAIL "Time\t\tIn/Out\tSource\t\tSPort\tDestination\tDPort\n\n";
+
+    foreach $time (sort keys %{ $activityhash{$linksys} }) {
+
+	print MAIL "$time\t".
+	    $activityhash{$linksys}{$time}{'type'}."\t".
+	    $activityhash{$linksys}{$time}{'shost'}."\t".
+	    $activityhash{$linksys}{$time}{'sport'}."\t".
+	    $activityhash{$linksys}{$time}{'dhost'}."\t".
+	    $activityhash{$linksys}{$time}{'dport'}."\t".
+	    "\n";
+    }
+}
+
+if (!$linksysmon->ReportIgnoreSystem) {
+
+    foreach $linksys (keys %systemhash) {
+
+	print MAIL "\n\nSystem Messages for $linksys\n\n";
+
+	my $lastmessage = "";
+	my $repeatcount = 0;
+
+	foreach $time (sort keys %{ $systemhash{$linksys} }) {
+
+	    if ($systemhash{$linksys}{$time} eq $lastmessage) {
+		$repeatcount ++;
+	    }
+	    else {
+		if ($repeatcount > 0) {
+		    print MAIL "Last message repeated $repeatcount times\n";
+		}
+	    
+		print MAIL "$time\t".$systemhash{$linksys}{$time}."\n";
+		$lastmessage = $systemhash{$linksys}{$time};
+		$repeatcount = 0;
+	    }
+	}
+    }
+}
+
+foreach $linksys (keys %linksysmonhash) {
+
+    print MAIL "\n\nlinksysmon Messages for $linksys\n\n";
+    
+    foreach $time (sort keys %{ $linksysmonhash{$linksys} }) {
+	print MAIL "$time\t".$linksysmonhash{$linksys}{$time}."\n";
+    }
+}
+
+if (@parseerrors) {
+
+    print MAIL "\n\nParse Errors\n\n";
+    
+    foreach (@parseerrors) {
+	print MAIL "$_\n";
+    }
+}
+
+close (MAIL);

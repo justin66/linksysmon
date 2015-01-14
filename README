@@ -1,0 +1,82 @@
+"linksysmon"
+
+Please see the file "COPYING" for copyright information.
+
+linksysmon is a tool for monitoring Linksys BEFSR firewalls under
+Linux and other Unix-like operating systems (I specify Linux because
+that is what I used to develop it, and the only one I know for sure
+works).  It accepts log mesages from the Linksys, and logs the
+messages to /var/log/linksys.log.  It handles the standard activity
+logs, as well as the "secret" extended logging, and can handle logs
+from multiple firewalls.  When using extended logging, it can detect
+external IP address changes (if you are using either DHCP or PPPOE)
+and can call an external program to process the change.
+
+The following files are installed by linksysmon:
+
+/etc/init.d/linksysmon
+
+The init script that starts and stops linksysmon
+
+/etc/logrotate.d/linksysmon 
+
+The configuration script for logrotate to automatically rotate
+/var/log/linksys.log.
+
+/etc/cron.daily/linksysmon-report
+
+Daily cron job that calls /usr/sbin/linksysmon-report. 
+
+/usr/sbin/linksysmon
+
+The perl script that actually does the logging
+
+/usr/sbin/linksysmon-ipchange
+
+The default perl script that is called when linksysmon detects an IP
+address change. This just sends mail to a list of addresses
+
+/usr/sbin/linksysmon-ez-ipupdate
+
+An alternate IP address change perl script that uses ez-ipupdate to
+update an DNS entry in one of the following dynamic DNS services:
+
+        * http://www.ez-ip.net
+        * http://www.justlinux.com
+        * http://www.dhs.org
+        * http://www.dyndns.org
+        * http://www.ods.org
+        * http://gnudip.cheapnet.net (GNUDip)
+        * http://www.dyn.ca (GNUDip)
+        * http://www.tzo.com
+        * http://www.easydns.com
+        * http://www.dyns.cx
+        * http://www.hn.org
+        * http://www.zoneedit.com
+
+This script is pretty much untested, so let me know if you encounter
+any problems.  Send mail to mjw@purplefrog.com to let me know how it
+works for you.
+
+/usr/sbin/linksysmon-report
+
+Generates an email report for the previous day's activity. Can filter
+out hosts, ports, and types of log entries so that you only see the
+stuff that might interest you.
+
+/usr/sbin/linksysmon-watch
+
+Default script called by linksysmon when a watched host or port has
+some activity.  This script just sends email to a list of addresses.
+
+linksysmon.pm
+
+This perl module contains code common to all the linksysmon scripts.
+
+linksys has been developed & tested under RedHat Linux 7.1.
+
+See the file INSTALL for installation instructions.
+
+Mike Wohlgemuth
+mjw@purplefrog.com
+http://woogie.net/linksysmon/
